@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Bun
+.bun/
+# Compiled single-file executables (bun build --compile)
+setupper
+dist/
+*.exe
+
+# Environment (Bun auto-loads .env; keep secrets out of git)
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# Caches / build output
+.cache/
+*.tsbuildinfo
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json
