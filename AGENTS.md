@@ -8,6 +8,10 @@ duplicating its content.
 
 - Externally visible docs default to **English**: `README.md`, `AGENTS.md`,
   everything under `docs/`, and code comments.
+- Some docs are maintained in parallel English/Japanese versions (for example,
+  `README.md` and its Japanese counterpart `docs/README.ja.md`). When you update
+  one language, verify that the other stays in sync and update it in the same
+  change so the two versions keep describing the same content.
 
 ## Project overview
 
