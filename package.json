@@ -3,10 +3,18 @@
   "module": "index.ts",
   "type": "module",
   "private": true,
+  "scripts": {
+    "check": "biome check --write ."
+  },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.5",
     "@types/bun": "latest"
   },
   "peerDependencies": {
     "typescript": "^5"
+  },
+  "dependencies": {
+    "valibot": "^1.4.2",
+    "yaml": "^2.9.0"
   }
 }

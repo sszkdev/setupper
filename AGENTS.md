@@ -4,6 +4,18 @@ This file is the canonical agent guidance for this repository. Tool-specific
 files (`CLAUDE.md`, `.cursor/rules/*`) should reference this file rather than
 duplicating its content.
 
+## Documentation language
+
+- Externally visible docs default to **English**: `README.md`, `AGENTS.md`,
+  everything under `docs/`, and code comments.
+
+## Project overview
+
+setupper is a CLI that defines and runs shortcut commands from a single YAML
+placed in a workspace directory (a directory that groups several repositories).
+
+## Bun
+
 Default to using Bun instead of Node.js.
 
 - Use `bun <file>` instead of `node <file>` or `ts-node <file>`
@@ -23,6 +35,15 @@ Default to using Bun instead of Node.js.
 - `WebSocket` is built-in. Don't use `ws`.
 - Prefer `Bun.file` over `node:fs`'s readFile/writeFile
 - Bun.$`ls` instead of execa.
+
+## Formatting and linting
+
+This project uses [Biome](https://biomejs.dev/) for formatting, linting, and
+import organization (configured in `biome.json`).
+
+Always run `bun run check` after making changes. It runs
+`biome check --write .`, which applies formatting, organizes imports, and
+applies safe lint fixes across the repository.
 
 ## Testing
 
