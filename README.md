@@ -51,6 +51,34 @@ Other candidates, in case `sup` is already taken on your machine:
 Pick one that does not collide with a command you already use (check with
 `command -v <name>`).
 
+### Optional: run commands without the `setupper` prefix
+
+Even with a short alias you still type a prefix (`sup web`). To run a command by
+its bare name (`web`), add setupper's shell integration:
+
+```sh
+# ~/.zshrc
+eval "$(setupper shell-init zsh)"
+
+# ~/.bashrc
+eval "$(setupper shell-init bash)"
+```
+
+This installs a `command_not_found_handler` (zsh) / `command_not_found_handle`
+(bash): when you type a name that is not already a real command, setupper checks
+the nearest `setupper.yaml` and, if that name is defined there, runs it. Because
+setupper resolves the config by walking up from the current directory, the same
+bare name maps to whichever workspace you are in — no per-workspace shell setup
+required.
+
+Caveats:
+
+- It only fires for names that are **not** already real commands. If a program
+  named `web` is on your `PATH`, that program wins. Pick command names that do
+  not collide (check with `command -v <name>`).
+- A genuine typo of an undefined name falls through to the normal
+  "command not found" message, so nothing unexpected runs.
+
 ## Usage
 
 ```sh

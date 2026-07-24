@@ -53,6 +53,33 @@ alias sup='setupper'   # おすすめ — 短くて覚えやすく、"setUPPer" 
 既に使っているコマンドと衝突しない名前を選んでください（`command -v <name>`
 で確認できます）。
 
+### 補足: `setupper` を付けずにコマンドを実行する
+
+短いエイリアスを使っても、まだプレフィックス（`sup web`）は必要です。コマンドを
+素の名前（`web`）で実行したい場合は、setupper のシェル統合を追加します。
+
+```sh
+# ~/.zshrc
+eval "$(setupper shell-init zsh)"
+
+# ~/.bashrc
+eval "$(setupper shell-init bash)"
+```
+
+これは `command_not_found_handler`（zsh）/ `command_not_found_handle`（bash）を
+登録します。実在しないコマンド名を打つと、setupper が最も近い `setupper.yaml` を
+調べ、そこに定義があれば実行します。setupper はカレントディレクトリから上方向へ
+たどって設定を解決するため、同じ素の名前が「今いるワークスペース」のコマンドに
+対応します。ワークスペースごとのシェル設定は不要です。
+
+注意点:
+
+- 発火するのは**実在コマンドでない**名前のときだけです。`PATH` 上に `web` という
+  プログラムがあればそちらが優先されます。衝突しない名前を選んでください
+  （`command -v <name>` で確認できます）。
+- 未定義名の単なる打ち間違いは通常の「command not found」に落ちるので、意図しない
+  コマンドが走ることはありません。
+
 ## 使い方
 
 ```sh

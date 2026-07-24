@@ -2,6 +2,7 @@ import pkg from "../package.json" with { type: "json" };
 import type { Command, Config } from "./config.ts";
 import { loadConfig, normalizeSteps } from "./config.ts";
 import { runCommand } from "./runner.ts";
+import { SUPPORTED_SHELLS, shellInit } from "./shell-init.ts";
 
 function printList(config: Config): void {
   const names = Object.keys(config.commands);
@@ -40,6 +41,30 @@ async function main(argv: string[]): Promise<number> {
   if (name === "--version" || name === "-v") {
     console.log(pkg.version);
     return 0;
+  }
+
+  if (name === "shell-init") {
+    const snippet = flag ? shellInit(flag) : null;
+    if (snippet === null) {
+      console.error(
+        `Usage: setupper shell-init <${SUPPORTED_SHELLS.join("|")}>`,
+      );
+      return 1;
+    }
+    console.log(snippet);
+    return 0;
+  }
+
+  // Silent membership check used by the shell-init command-not-found hook.
+  // Prints nothing; exit 0 if the nearest config defines the command, else 1.
+  if (name === "--has") {
+    if (!flag) return 1;
+    try {
+      const { config } = await loadConfig(process.cwd());
+      return config.commands[flag] ? 0 : 1;
+    } catch {
+      return 1;
+    }
   }
 
   const { config, workspaceRoot } = await loadConfig(process.cwd());
