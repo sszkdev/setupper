@@ -42,6 +42,19 @@ setupper --version
 `setupper` finds the nearest `setupper.yaml` by walking up from the current
 directory, so you can run it from any repository inside the workspace.
 
+## Security
+
+`setupper` executes the shell steps in `setupper.yaml` verbatim, with your
+user's full permissions — it is a command runner, not a sandbox. A
+`setupper.yaml` can run *any* command your account can.
+
+**Do not run `setupper` against a `setupper.yaml` you do not trust.** Treat one
+that came from elsewhere — a cloned repository, a shared workspace, a downloaded
+example — like a shell script from that source: read it before running it.
+Because `setupper` walks up the directory tree to find the nearest
+`setupper.yaml`, also confirm the file it picks up is the one you expect, not one
+planted higher up in the tree.
+
 ## Concepts
 
 - **Workspace** — a directory that groups several repositories. It holds the
