@@ -30,6 +30,27 @@ bun install
 bun build --compile --outfile ~/bin/setupper src/index.ts
 ```
 
+### Optional: a shorter alias
+
+`setupper` is a little long to type, so a short alias is handy. Add one to your
+shell config (`~/.zshrc`, `~/.bashrc`, …):
+
+```sh
+alias sup='setupper'   # recommended — short, memorable, part of "setUPPer"
+```
+
+Other candidates, in case `sup` is already taken on your machine:
+
+| Alias | Why |
+| --- | --- |
+| `sup` | **Recommended.** 3 chars, echoes "set**UP**per", easy to remember. |
+| `stp` | Consonants of "setup". |
+| `spr` | Initials of "setupper". |
+| `se` | Shortest (2 chars), but higher typo/collision risk. |
+
+Pick one that does not collide with a command you already use (check with
+`command -v <name>`).
+
 ## Usage
 
 ```sh

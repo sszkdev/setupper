@@ -32,6 +32,27 @@ bun install
 bun build --compile --outfile ~/bin/setupper src/index.ts
 ```
 
+### 補足: 短いエイリアス
+
+`setupper` は毎回打つには少し長いので、短いエイリアスを登録しておくと便利です。
+シェルの設定ファイル（`~/.zshrc`、`~/.bashrc` など）に追記します。
+
+```sh
+alias sup='setupper'   # おすすめ — 短くて覚えやすく、"setUPPer" の一部
+```
+
+`sup` が既に使われている場合の候補:
+
+| エイリアス | 理由 |
+| --- | --- |
+| `sup` | **おすすめ。** 3 文字で "set**UP**per" を連想でき、覚えやすい。 |
+| `stp` | "setup" の子音。 |
+| `spr` | "setupper" の頭文字。 |
+| `se` | 最短（2 文字）だが、打ち間違い・衝突のリスクが高め。 |
+
+既に使っているコマンドと衝突しない名前を選んでください（`command -v <name>`
+で確認できます）。
+
 ## 使い方
 
 ```sh
