@@ -1,17 +1,17 @@
 {
   "name": "setupper",
+  "version": "1.0.0",
   "module": "src/index.ts",
   "type": "module",
   "private": true,
   "license": "MIT",
   "scripts": {
-    "check": "biome check --write ."
+    "check": "biome check --write .",
+    "build": "bun build --compile --outfile ~/bin/setupper src/index.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.5",
-    "@types/bun": "latest"
-  },
-  "peerDependencies": {
+    "@types/bun": "latest",
     "typescript": "^5"
   },
   "dependencies": {
