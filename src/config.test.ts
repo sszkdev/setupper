@@ -60,6 +60,27 @@ test("normalizeSteps keeps map-form steps and fills defaults", () => {
   ]);
 });
 
+test("parseConfig accepts a command-level shell", () => {
+  const config = parseConfig(
+    "version: 1\ncommands:\n  c:\n    shell: zsh\n    run: |\n      for p in 1 2 3; do echo $p; done\n",
+  );
+  expect(command(config, "c").shell).toBe("zsh");
+});
+
+test("normalizeSteps carries a step-level shell override", () => {
+  const config = parseConfig(
+    "version: 1\ncommands:\n  c:\n    run:\n      - echo plain\n      - run: for p in 1 2; do echo $p; done\n        shell: bash\n",
+  );
+  expect(normalizeSteps(command(config, "c").run)).toEqual([
+    { run: "echo plain", allow_failure: false },
+    {
+      run: "for p in 1 2; do echo $p; done",
+      allow_failure: false,
+      shell: "bash",
+    },
+  ]);
+});
+
 test("expandEnv replaces ${VAR} from the given source", () => {
   expect(expandEnv("${HOME}/tools", { HOME: "/home/x" })).toBe("/home/x/tools");
   expect(expandEnv("${MISSING}!", {})).toBe("!");
@@ -91,6 +112,27 @@ test("findConfigFile returns null when nothing is found", async () => {
   const root = await mkdtemp(join(tmpdir(), "setupper-empty-"));
   try {
     expect(await findConfigFile(root)).toBeNull();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("findConfigFile accepts a .yml config too", async () => {
+  const root = await mkdtemp(join(tmpdir(), "setupper-yml-"));
+  try {
+    await Bun.write(join(root, "setupper.yml"), "version: 1\ncommands: {}\n");
+    expect(await findConfigFile(root)).toBe(join(root, "setupper.yml"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("findConfigFile prefers .yaml over .yml in the same directory", async () => {
+  const root = await mkdtemp(join(tmpdir(), "setupper-both-"));
+  try {
+    await Bun.write(join(root, "setupper.yaml"), "version: 1\ncommands: {}\n");
+    await Bun.write(join(root, "setupper.yml"), "version: 1\ncommands: {}\n");
+    expect(await findConfigFile(root)).toBe(join(root, "setupper.yaml"));
   } finally {
     await rm(root, { recursive: true, force: true });
   }

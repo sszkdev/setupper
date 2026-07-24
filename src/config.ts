@@ -2,13 +2,15 @@ import { dirname, join, resolve } from "node:path";
 import * as v from "valibot";
 import { parse as parseYaml } from "yaml";
 
-export const CONFIG_FILENAME = "setupper.yaml";
+/** Config filenames tried in each directory, `.yaml` before `.yml`. */
+export const CONFIG_FILENAMES = ["setupper.yaml", "setupper.yml"] as const;
 
 const StepSchema = v.union([
   v.string(),
   v.object({
     run: v.string(),
     allow_failure: v.optional(v.boolean(), false),
+    shell: v.optional(v.string()),
   }),
 ]);
 
@@ -16,6 +18,7 @@ const CommandSchema = v.object({
   description: v.optional(v.string()),
   dir: v.optional(v.string()),
   env: v.optional(v.record(v.string(), v.string())),
+  shell: v.optional(v.string()),
   run: v.union([v.string(), v.array(StepSchema)]),
 });
 
@@ -29,7 +32,7 @@ export type Config = v.InferOutput<typeof ConfigSchema>;
 export type Command = v.InferOutput<typeof CommandSchema>;
 
 /** A single shell step, always in normalized (map) form. */
-export type Step = { run: string; allow_failure: boolean };
+export type Step = { run: string; allow_failure: boolean; shell?: string };
 
 /** Parse and validate the YAML text of a `setupper.yaml`. Throws on error. */
 export function parseConfig(text: string): Config {
@@ -75,12 +78,17 @@ export function resolveEnv(
   return result;
 }
 
-/** Walk up from `startDir` to find the nearest `setupper.yaml`. */
+/**
+ * Walk up from `startDir` to find the nearest config file. Within a directory,
+ * `setupper.yaml` takes precedence over `setupper.yml`.
+ */
 export async function findConfigFile(startDir: string): Promise<string | null> {
   let dir = resolve(startDir);
   while (true) {
-    const candidate = join(dir, CONFIG_FILENAME);
-    if (await Bun.file(candidate).exists()) return candidate;
+    for (const name of CONFIG_FILENAMES) {
+      const candidate = join(dir, name);
+      if (await Bun.file(candidate).exists()) return candidate;
+    }
     const parent = dirname(dir);
     if (parent === dir) return null;
     dir = parent;
@@ -99,7 +107,7 @@ export async function loadConfig(startDir: string): Promise<LoadedConfig> {
   const path = await findConfigFile(startDir);
   if (!path) {
     throw new Error(
-      `No ${CONFIG_FILENAME} found in ${startDir} or any parent directory.`,
+      `No ${CONFIG_FILENAMES.join(" or ")} found in ${startDir} or any parent directory.`,
     );
   }
   let config: Config;

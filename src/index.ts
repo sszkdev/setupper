@@ -22,9 +22,14 @@ function printHelp(name: string, command: Command): void {
   console.log(name);
   if (command.description) console.log(`  ${command.description}`);
   console.log(`  dir: ${command.dir ?? "."}`);
+  if (command.shell) console.log(`  shell: ${command.shell}`);
   console.log("  steps:");
   for (const step of normalizeSteps(command.run)) {
-    const suffix = step.allow_failure ? "  (allow_failure)" : "";
+    const marks = [
+      step.shell ? `shell: ${step.shell}` : null,
+      step.allow_failure ? "allow_failure" : null,
+    ].filter((mark): mark is string => mark !== null);
+    const suffix = marks.length > 0 ? `  (${marks.join(", ")})` : "";
     console.log(`    - ${step.run}${suffix}`);
   }
 }

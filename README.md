@@ -60,8 +60,9 @@ setupper <command> -h    # show a command's description and steps
 setupper --version
 ```
 
-`setupper` finds the nearest `setupper.yaml` by walking up from the current
-directory, so you can run it from any repository inside the workspace.
+`setupper` finds the nearest config file (`setupper.yaml`, or `setupper.yml`) by
+walking up from the current directory, so you can run it from any repository
+inside the workspace.
 
 ## Security
 
@@ -81,14 +82,17 @@ planted higher up in the tree.
 - **Workspace** — a directory that groups several repositories. It holds the
   single `setupper.yaml`.
 - **Command** — a named shortcut with a description and a list of steps.
-- **Step** — one shell line. Steps run top to bottom; if one fails, the remaining
-  steps are skipped and the command stops.
+- **Step** — a shell snippet. Steps run top to bottom; if one fails, the
+  remaining steps are skipped and the command stops. A step runs via Bun's
+  built-in shell by default, or via an external shell when `shell` is set (see
+  [Choosing the shell](#choosing-the-shell)).
 - **Working directory (`dir`)** — where a command runs, relative to the workspace
   root. Usually a repository subdirectory.
 
 ## Configuration — `setupper.yaml`
 
-Place a single file at the workspace root:
+Place a single file at the workspace root. It may be named `setupper.yaml` or
+`setupper.yml` (`.yaml` takes precedence if both exist).
 
 ```yaml
 version: 1
@@ -139,9 +143,11 @@ commands:
 | `description` | command | string | One‑line help shown in `setupper list`. |
 | `dir` | command | string | Working directory, relative to the workspace root. Default: workspace root. |
 | `env` | command | map | Extra env vars, merged over the root `env`. |
-| `run` | command | string or list | Shell step(s). Run top to bottom via the system shell; the first failing step stops the rest. |
+| `shell` | command | string | Shell used to run this command's steps, e.g. `zsh` or `bash`. Each step runs as `<shell> -c <step>`. Default: Bun's built‑in shell. |
+| `run` | command | string or list | Shell step(s). Run top to bottom; the first failing step stops the rest. |
 | `run` | step | string | The shell command for a map‑form step. |
 | `allow_failure` | step | boolean | If `true`, the command keeps going even when this step fails. Default `false`. |
+| `shell` | step | string | Shell for this one step, overriding the command's `shell`. |
 
 Writing a step as a map gives finer control:
 
@@ -152,6 +158,39 @@ run:
     allow_failure: true            # keep going even if this step fails
 ```
 
+### Choosing the shell
+
+By default each step runs through Bun's built‑in shell. It is fast and portable
+and covers the common cases (pipes, `&&`/`||`, redirects, `$(…)`, `${VAR}`), but
+it is **not** a full shell: constructs like `for` loops, background jobs (`&`),
+and `trap` are not supported.
+
+Set `shell` to run a command's steps through a real shell instead. The step is
+executed as `<shell> -c <step>`, so with a multi‑line `run:` block you get the
+full language of that shell — loops, background jobs, `trap`, and so on. This is
+handy when a command needs real control flow, or for porting an existing shell
+function verbatim:
+
+```yaml
+commands:
+  e2e:
+    description: Start the mock server, wait for it, then run the e2e suite
+    dir: app
+    shell: bash                    # run the block below with bash
+    run: |
+      npm run mock-server &                     # background job
+      server=$!
+      trap 'kill "$server" 2>/dev/null' EXIT    # stop it on the way out
+      for i in $(seq 1 10); do                  # wait for it to come up
+        curl -sf http://localhost:3000/health && break
+        sleep 1
+      done
+      npm run test:e2e
+```
+
+`shell` can also be set per step (on a map‑form step) to override the command's
+shell for just that step.
+
 ## What setupper replaces (mapping from shell aliases)
 
 | Shell pattern | setupper equivalent |
@@ -161,6 +200,7 @@ run:
 | <code>cp -n .env.sample .env.local &#124;&#124; true</code> | a `cp -n` step / `allow_failure: true` |
 | `export SOME_VAR=…` | top‑level `env:` |
 | `echo "hint…"` | an `echo` step |
+| a `<name>() { … }` function using loops / `&` / `trap` | `shell: zsh` + a multi‑line `run:` block |
 
 ## Documentation
 
