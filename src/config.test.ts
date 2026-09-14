@@ -131,6 +131,71 @@ test("normalizeSteps carries a step-level shell override", () => {
   ]);
 });
 
+test("parseConfig accepts declared args and fills rest: false", () => {
+  const config = parseConfig(
+    "version: 1\ncommands:\n  c:\n    args:\n      - name: service\n        description: which one\n      - name: lines\n        default: '100'\n    run: echo hi\n",
+  );
+  expect(command(config, "c").args).toEqual([
+    { name: "service", description: "which one", rest: false },
+    { name: "lines", default: "100", rest: false },
+  ]);
+});
+
+test("parseConfig accepts a rest arg when every step has a shell", () => {
+  const config = parseConfig(
+    'version: 1\ncommands:\n  c:\n    shell: bash\n    args:\n      - name: flags\n        rest: true\n    run: echo "$@"\n',
+  );
+  expect(command(config, "c").args?.[0]?.rest).toBe(true);
+});
+
+test("parseConfig rejects an invalid arg name", () => {
+  expect(() =>
+    parseConfig(
+      "version: 1\ncommands:\n  c:\n    args:\n      - name: Bad-Name\n    run: echo hi\n",
+    ),
+  ).toThrow(/commands\.c\.args\.0\.name/);
+});
+
+test("parseConfig rejects duplicate arg names", () => {
+  expect(() =>
+    parseConfig(
+      "version: 1\ncommands:\n  c:\n    args:\n      - name: a\n      - name: a\n    run: echo hi\n",
+    ),
+  ).toThrow(/commands\.c: args: duplicate name "a"/);
+});
+
+test("parseConfig rejects a required arg after an optional one", () => {
+  expect(() =>
+    parseConfig(
+      "version: 1\ncommands:\n  c:\n    args:\n      - name: a\n        default: x\n      - name: b\n    run: echo hi\n",
+    ),
+  ).toThrow(/commands\.c: args: required "b" cannot follow an optional/);
+});
+
+test("parseConfig rejects a rest arg that is not last", () => {
+  expect(() =>
+    parseConfig(
+      "version: 1\ncommands:\n  c:\n    shell: bash\n    args:\n      - name: a\n        rest: true\n      - name: b\n    run: echo hi\n",
+    ),
+  ).toThrow(/commands\.c: args: rest "a" must be the last/);
+});
+
+test("parseConfig rejects a rest arg with a default", () => {
+  expect(() =>
+    parseConfig(
+      "version: 1\ncommands:\n  c:\n    shell: bash\n    args:\n      - name: a\n        rest: true\n        default: x\n    run: echo hi\n",
+    ),
+  ).toThrow(/commands\.c: args: rest "a" cannot have a default/);
+});
+
+test("parseConfig rejects a rest arg when a step uses Bun's shell", () => {
+  expect(() =>
+    parseConfig(
+      'version: 1\ncommands:\n  c:\n    args:\n      - name: a\n        rest: true\n    run:\n      - run: echo "$@"\n        shell: bash\n      - echo plain\n',
+    ),
+  ).toThrow(/commands\.c: args: rest "a" requires `shell`/);
+});
+
 test("expandEnv replaces ${VAR} from the given source", () => {
   expect(expandEnv("${HOME}/tools", { HOME: "/home/x" })).toBe("/home/x/tools");
   expect(expandEnv("${MISSING}!", {})).toBe("!");
