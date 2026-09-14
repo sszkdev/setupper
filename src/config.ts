@@ -5,14 +5,13 @@ import { parse as parseYaml } from "yaml";
 /** Config filenames tried in each directory, `.yaml` before `.yml`. */
 export const CONFIG_FILENAMES = ["setupper.yaml", "setupper.yml"] as const;
 
-const StepSchema = v.union([
-  v.string(),
-  v.object({
-    run: v.string(),
-    allow_failure: v.optional(v.boolean(), false),
-    shell: v.optional(v.string()),
-  }),
-]);
+const StepMapSchema = v.object({
+  run: v.string(),
+  allow_failure: v.optional(v.boolean(), false),
+  shell: v.optional(v.string()),
+});
+
+const StepSchema = v.union([v.string(), StepMapSchema]);
 
 const ArgSchema = v.object({
   name: v.pipe(
@@ -91,15 +90,69 @@ function argsProblems(command: v.InferOutput<typeof CommandObjectSchema>) {
   return problems;
 }
 
+type Issue = v.BaseIssue<unknown>;
+type LocatedIssue = { path: v.IssuePathItem[]; issue: Issue };
+
+/**
+ * Resolve union issues down to the option that actually matched the input's
+ * type. A union reports one issue per option; options whose issues carry a
+ * path got past the type check, so the real cause is nested inside them.
+ * `v.object` also accepts arrays, so an option that only got there by
+ * treating an array as an object does not count as matching.
+ * Nested issue paths are relative, so they are joined onto the parent path.
+ */
+function locateIssues(issue: Issue, prefix: v.IssuePathItem[]): LocatedIssue[] {
+  const path = [...prefix, ...(issue.path ?? [])];
+  const deeper =
+    issue.type === "union"
+      ? (issue.issues ?? []).filter(
+          (sub) =>
+            sub.path?.length &&
+            !(
+              sub.path[0]?.type === "object" && Array.isArray(sub.path[0].input)
+            ),
+        )
+      : [];
+  if (deeper.length === 0) return [{ path, issue }];
+  return deeper.flatMap((sub) => locateIssues(sub, path));
+}
+
+function formatIssue({ path, issue }: LocatedIssue): string {
+  const last = path.at(-1);
+  const keys = last?.type === "object" ? Object.keys(last.input as object) : [];
+  // A list step that is a map without `run` is reported at the step itself.
+  if (
+    issue.type === "object" &&
+    last?.key === "run" &&
+    keys.length > 0 &&
+    path.at(-2)?.type === "array"
+  ) {
+    const message = `step is a map without "run" (keys: ${keys.map((key) => JSON.stringify(key)).join(", ")}).`;
+    // With a known step key, `run` was just forgotten. Otherwise it is almost
+    // always a plain string step containing ": ", which YAML parses as a map.
+    const forgotRun = keys.some((key) => key in StepMapSchema.entries);
+    return formatLine(
+      path.slice(0, -1),
+      forgotRun
+        ? message
+        : `${message} A step containing ": " is parsed by YAML as a map; quote the whole step.`,
+    );
+  }
+  return formatLine(path, issue.message);
+}
+
+function formatLine(path: v.IssuePathItem[], message: string): string {
+  const dotPath = path.map((item) => String(item.key)).join(".");
+  return dotPath ? `  - ${dotPath}: ${message}` : `  - ${message}`;
+}
+
 /** Parse and validate the YAML text of a `setupper.yaml`. Throws on error. */
 export function parseConfig(text: string): Config {
   const result = v.safeParse(ConfigSchema, parseYaml(text));
   if (result.success) return result.output;
   const details = result.issues
-    .map((issue) => {
-      const path = v.getDotPath(issue);
-      return path ? `  - ${path}: ${issue.message}` : `  - ${issue.message}`;
-    })
+    .flatMap((issue) => locateIssues(issue, []))
+    .map(formatIssue)
     .join("\n");
   throw new Error(`invalid config:\n${details}`);
 }
