@@ -1,4 +1,6 @@
 import pkg from "../package.json" with { type: "json" };
+import type { ParsedArgs } from "./args.ts";
+import { ArgsError, formatUsage, parseArgs } from "./args.ts";
 import type { Command, Config } from "./config.ts";
 import { loadConfig, normalizeSteps } from "./config.ts";
 import { runCommand } from "./runner.ts";
@@ -20,10 +22,26 @@ function printList(config: Config): void {
 }
 
 function printHelp(name: string, command: Command): void {
+  const specs = command.args ?? [];
   console.log(name);
   if (command.description) console.log(`  ${command.description}`);
+  console.log(`  usage: setupper ${formatUsage(name, specs)}`);
   console.log(`  dir: ${command.dir ?? "."}`);
   if (command.shell) console.log(`  shell: ${command.shell}`);
+  if (specs.length > 0) {
+    console.log("  args:");
+    for (const spec of specs) {
+      const marks = [
+        spec.default !== undefined
+          ? `default: ${JSON.stringify(spec.default)}`
+          : null,
+        spec.rest ? "rest" : null,
+      ].filter((mark): mark is string => mark !== null);
+      const description = spec.description ? `: ${spec.description}` : "";
+      const suffix = marks.length > 0 ? `  (${marks.join(", ")})` : "";
+      console.log(`    - ${spec.name}${description}${suffix}`);
+    }
+  }
   console.log("  steps:");
   for (const step of normalizeSteps(command.run)) {
     const marks = [
@@ -81,25 +99,24 @@ async function main(argv: string[]): Promise<number> {
     return 1;
   }
 
-  const extra = argv.slice(1);
-  if (extra.length === 1 && (flag === "-h" || flag === "--help")) {
+  const commandArgv = argv.slice(1);
+  if (commandArgv.length === 1 && (flag === "-h" || flag === "--help")) {
     printHelp(name, command);
     return 0;
   }
 
-  // Commands take no arguments; ignoring them would let a mistyped flag
-  // such as `--dry-run` silently perform the real run.
-  const [unexpected] = extra;
-  if (unexpected !== undefined) {
-    console.error(
-      unexpected.startsWith("-")
-        ? `unknown option: ${unexpected}`
-        : `unexpected argument: ${unexpected}`,
-    );
+  const specs = command.args ?? [];
+  let args: ParsedArgs;
+  try {
+    args = parseArgs(specs, commandArgv);
+  } catch (error) {
+    if (!(error instanceof ArgsError)) throw error;
+    console.error(error.message);
+    console.error(`usage: setupper ${formatUsage(name, specs)}`);
     return 1;
   }
 
-  return runCommand(config, command, workspaceRoot);
+  return runCommand(config, command, workspaceRoot, args);
 }
 
 main(process.argv.slice(2))

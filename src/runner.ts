@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { $ } from "bun";
+import type { ParsedArgs } from "./args.ts";
 import type { Command, Config, Step } from "./config.ts";
 import { normalizeSteps, resolveEnv } from "./config.ts";
 
@@ -10,19 +11,22 @@ import { normalizeSteps, resolveEnv } from "./config.ts";
  *
  * Steps run via Bun's built-in shell by default; when `shell` is set (on the
  * command or an individual step) the step is run as `<shell> -c <step>`.
+ * Arguments reach every step as `SETUPPER_ARG_*` env vars, and additionally as
+ * `$1`, `$2`, … under an external shell.
  */
 export async function runCommand(
   config: Config,
   command: Command,
   workspaceRoot: string,
+  args: ParsedArgs,
 ): Promise<number> {
   const cwd = command.dir ? join(workspaceRoot, command.dir) : workspaceRoot;
-  const env = { ...process.env, ...resolveEnv(config, command) };
+  const env = { ...process.env, ...resolveEnv(config, command), ...args.env };
 
   for (const step of normalizeSteps(command.run)) {
     const shell = step.shell ?? command.shell;
     const exitCode = shell
-      ? await runInShell(shell, step, cwd, env)
+      ? await runInShell(shell, step, cwd, env, args.positional)
       : await runInBunShell(step, cwd, env);
     if (exitCode !== 0 && !step.allow_failure) return exitCode;
   }
@@ -42,14 +46,18 @@ async function runInBunShell(
   return exitCode;
 }
 
-/** Run a step through an external shell: `<shell> -c <step>`. */
+/**
+ * Run a step through an external shell: `<shell> -c <step> setupper <args…>`,
+ * so the arguments become the step's positional parameters.
+ */
 async function runInShell(
   shell: string,
   step: Step,
   cwd: string,
   env: Record<string, string | undefined>,
+  positional: string[],
 ): Promise<number> {
-  const proc = Bun.spawn([shell, "-c", step.run], {
+  const proc = Bun.spawn([shell, "-c", step.run, "setupper", ...positional], {
     cwd,
     env,
     stdin: "inherit",

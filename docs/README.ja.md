@@ -83,9 +83,9 @@ eval "$(setupper shell-init bash)"
 ## 使い方
 
 ```sh
-setupper                 # 利用可能なコマンド一覧（`setupper list` と同じ）
-setupper <command>       # コマンドを実行
-setupper <command> -h    # コマンドの説明とステップを表示
+setupper                    # 利用可能なコマンド一覧（`setupper list` と同じ）
+setupper <command> [args]   # コマンドを実行（args は `args` を宣言したコマンドのみ）
+setupper <command> -h       # コマンドの説明・使い方・ステップを表示
 setupper --version
 ```
 
@@ -178,6 +178,11 @@ commands:
 | `run` | ステップ | string | マップ形式のステップで実行するコマンド。 |
 | `allow_failure` | ステップ | boolean | `true` なら、このステップが失敗しても中断せず次へ進む。既定は `false`。 |
 | `shell` | ステップ | string | このステップだけのシェル。コマンドの `shell` を上書きする。 |
+| `args` | コマンド | list | コマンドが受け付ける位置引数（[引数の受け渡し](#引数の受け渡し)を参照）。既定はなしで、余分な引数はエラーになる。 |
+| `name` | 引数 | string | 引数名。`^[a-z][a-z0-9_]*$` に一致する必要がある。ステップには `SETUPPER_ARG_<NAME>` として渡される。 |
+| `description` | 引数 | string | `setupper <command> -h` に表示される説明。 |
+| `default` | 引数 | string | 引数を省略したときに使う値。指定しない引数は必須になる。 |
+| `rest` | 引数 | boolean | 残りの引数をすべて受け取る。最後の引数にのみ指定でき、`shell` が必要。既定は `false`。 |
 
 ステップをマップ形式で書くと、より細かく制御できます。
 
@@ -221,6 +226,58 @@ commands:
 `shell` はステップ単位（マップ形式のステップ）でも指定でき、そのステップだけ
 コマンドの `shell` を上書きできます。
 
+### 引数の受け渡し
+
+コマンドは `args` で宣言した場合にだけ位置引数を受け付けます。宣言していない
+コマンドに余分な引数や `--dry-run` のような未知のフラグを渡すと、黙って無視せず
+エラーになります。
+
+```yaml
+commands:
+  logs:
+    description: サービスのログを追う
+    args:
+      - name: service
+        description: サービス名（例: api、web）
+      - name: lines
+        default: "100"
+    run: docker compose logs --tail "$SETUPPER_ARG_LINES" "$SETUPPER_ARG_SERVICE"
+```
+
+`setupper logs api` は 100 行、`setupper logs api 20` は 20 行を表示します。
+
+- 各引数は `SETUPPER_ARG_<NAME>`（name を大文字にしたもの）という環境変数として、
+  Bun 内蔵シェルでも外部シェル（`shell`）でも渡されます。値はデータとして渡され、
+  シェルとして再解釈されることはないため、`setupper logs '; rm -rf ~'` は単に変わった
+  サービス名として扱われます。
+- `default` のない引数は必須で、足りないと使い方を表示して終了コード 1 で終了します。
+  必須の引数は省略可能な引数より前に置きます。宣言より多い引数もエラーです。
+- `-` で始まる引数はフラグとみなされ、エラーになります。`-` で始まる値は `--` の
+  後ろに置いてください（`setupper logs -- -weird-name`）。`-h` / `--help` を単独で
+  渡すとヘルプを表示し、`setupper logs -- -h` なら `-h` を引数として渡します。
+- `shell` を指定した場合は、位置パラメータ `$1`、`$2`、…、`"$@"` としても受け取れます
+  （宣言順で、省略した引数には default が入ります）。Bun 内蔵シェルでは `$1` は
+  コマンドの引数を**指さない**ので、`SETUPPER_ARG_*` を使ってください。
+
+最後の引数に `rest: true` を付けると、残りの引数をすべて受け取れます。下のツールに
+フラグをそのまま渡したいときなどに使います。Bun 内蔵シェルはリストを 1 つずつ扱えない
+ため、`rest` には `shell` が必要で、値は `"$@"` で読みます。`rest` の引数には
+`SETUPPER_ARG_*` は設定されません。
+
+```yaml
+commands:
+  test:
+    description: テストを実行し、追加のフラグをそのまま渡す
+    dir: web-app
+    shell: bash
+    args:
+      - name: flags
+        rest: true
+    run: npm test -- "$@"
+```
+
+`setupper test -- --watch --coverage` は `npm test -- --watch --coverage` を実行します。
+
 ## setupper が置き換えるもの（シェル alias との対応）
 
 | シェルのパターン | setupper での表現 |
@@ -231,6 +288,7 @@ commands:
 | `export SOME_VAR=…` | トップレベルの `env:` |
 | `echo "hint…"` | `echo` ステップ |
 | ループ / `&` / `trap` を使う `<name>() { … }` 関数 | `shell: zsh` + 複数行の `run:` ブロック |
+| `"$1"` / `"$@"` を読む関数 | `args:` + `SETUPPER_ARG_*`（`shell` 指定時は `"$@"` も可） |
 
 ## ドキュメント
 

@@ -14,13 +14,34 @@ const StepSchema = v.union([
   }),
 ]);
 
-const CommandSchema = v.object({
+const ArgSchema = v.object({
+  name: v.pipe(
+    v.string(),
+    v.regex(/^[a-z][a-z0-9_]*$/, "must match ^[a-z][a-z0-9_]*$"),
+  ),
+  description: v.optional(v.string()),
+  default: v.optional(v.string()),
+  rest: v.optional(v.boolean(), false),
+});
+
+const CommandObjectSchema = v.object({
   description: v.optional(v.string()),
   dir: v.optional(v.string()),
   env: v.optional(v.record(v.string(), v.string())),
   shell: v.optional(v.string()),
+  args: v.optional(v.array(ArgSchema)),
   run: v.union([v.string(), v.array(StepSchema)]),
 });
+
+const CommandSchema = v.pipe(
+  CommandObjectSchema,
+  v.rawCheck(({ dataset, addIssue }) => {
+    if (!dataset.typed) return;
+    for (const problem of argsProblems(dataset.value)) {
+      addIssue({ message: `args: ${problem}` });
+    }
+  }),
+);
 
 const ConfigSchema = v.object({
   version: v.literal(1),
@@ -31,8 +52,44 @@ const ConfigSchema = v.object({
 export type Config = v.InferOutput<typeof ConfigSchema>;
 export type Command = v.InferOutput<typeof CommandSchema>;
 
+export type Arg = v.InferOutput<typeof ArgSchema>;
+
 /** A single shell step, always in normalized (map) form. */
 export type Step = { run: string; allow_failure: boolean; shell?: string };
+
+/** Rules across a command's `args` that per-field schemas cannot express. */
+function argsProblems(command: v.InferOutput<typeof CommandObjectSchema>) {
+  const specs = command.args ?? [];
+  const problems: string[] = [];
+  const seen = new Set<string>();
+  let optionalSeen = false;
+  specs.forEach((spec, index) => {
+    if (seen.has(spec.name)) problems.push(`duplicate name "${spec.name}"`);
+    seen.add(spec.name);
+    if (spec.rest) {
+      if (index !== specs.length - 1) {
+        problems.push(`rest "${spec.name}" must be the last argument`);
+      }
+      if (spec.default !== undefined) {
+        problems.push(`rest "${spec.name}" cannot have a default`);
+      }
+      // Bun's built-in shell has no "$@", so every step needs a real shell.
+      const steps = normalizeSteps(command.run);
+      if (steps.some((step) => !(step.shell ?? command.shell))) {
+        problems.push(
+          `rest "${spec.name}" requires \`shell\` on the command or every step`,
+        );
+      }
+    } else if (spec.default !== undefined) {
+      optionalSeen = true;
+    } else if (optionalSeen) {
+      problems.push(
+        `required "${spec.name}" cannot follow an optional argument`,
+      );
+    }
+  });
+  return problems;
+}
 
 /** Parse and validate the YAML text of a `setupper.yaml`. Throws on error. */
 export function parseConfig(text: string): Config {

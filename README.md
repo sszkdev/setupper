@@ -82,9 +82,9 @@ Caveats:
 ## Usage
 
 ```sh
-setupper                 # list available commands (same as `setupper list`)
-setupper <command>       # run a command
-setupper <command> -h    # show a command's description and steps
+setupper                    # list available commands (same as `setupper list`)
+setupper <command> [args]   # run a command (args only if it declares `args`)
+setupper <command> -h       # show a command's description, usage, and steps
 setupper --version
 ```
 
@@ -176,6 +176,11 @@ commands:
 | `run` | step | string | The shell command for a map‑form step. |
 | `allow_failure` | step | boolean | If `true`, the command keeps going even when this step fails. Default `false`. |
 | `shell` | step | string | Shell for this one step, overriding the command's `shell`. |
+| `args` | command | list | Positional arguments the command accepts (see [Passing arguments](#passing-arguments)). Default: none — any extra argument is an error. |
+| `name` | arg | string | Argument name, matching `^[a-z][a-z0-9_]*$`. Exposed to steps as `SETUPPER_ARG_<NAME>`. |
+| `description` | arg | string | Shown in `setupper <command> -h`. |
+| `default` | arg | string | Value used when the argument is omitted. Without it, the argument is required. |
+| `rest` | arg | boolean | Collect all remaining arguments. Last argument only; requires `shell`. Default `false`. |
 
 Writing a step as a map gives finer control:
 
@@ -219,6 +224,60 @@ commands:
 `shell` can also be set per step (on a map‑form step) to override the command's
 shell for just that step.
 
+### Passing arguments
+
+A command accepts positional arguments only when it declares them under `args`.
+Otherwise any extra argument, or an unrecognized flag such as `--dry-run`, is an
+error instead of being silently ignored.
+
+```yaml
+commands:
+  logs:
+    description: Tail a service's logs
+    args:
+      - name: service
+        description: service name, e.g. api or web
+      - name: lines
+        default: "100"
+    run: docker compose logs --tail "$SETUPPER_ARG_LINES" "$SETUPPER_ARG_SERVICE"
+```
+
+`setupper logs api` tails 100 lines; `setupper logs api 20` tails 20.
+
+- Each argument is exported as `SETUPPER_ARG_<NAME>` (the name uppercased), under
+  both Bun's built‑in shell and an external `shell`. Values are passed as data
+  and never re‑parsed as shell, so `setupper logs '; rm -rf ~'` is just an odd
+  service name.
+- An argument without `default` is required; a missing one exits 1 with the
+  usage line. Required arguments must come before optional ones, and more
+  arguments than declared is an error.
+- Anything starting with `-` is treated as a flag and rejected. Put values that
+  start with `-` after `--`: `setupper logs -- -weird-name`. `-h` / `--help` on
+  its own shows help; `setupper logs -- -h` passes `-h` as an argument.
+- With `shell` set, the arguments are also the positional parameters `$1`, `$2`,
+  …, `"$@"`, in declaration order with defaults filled in. Under Bun's built‑in
+  shell, `$1` does **not** refer to the command's arguments — use the
+  `SETUPPER_ARG_*` variables.
+
+Mark the last argument `rest: true` to collect everything that remains — for
+example, to forward flags to the underlying tool. Bun's built‑in shell cannot
+iterate over a list, so `rest` requires `shell` and is read through `"$@"`; it
+has no `SETUPPER_ARG_*` variable.
+
+```yaml
+commands:
+  test:
+    description: Run the test suite, forwarding extra flags
+    dir: web-app
+    shell: bash
+    args:
+      - name: flags
+        rest: true
+    run: npm test -- "$@"
+```
+
+`setupper test -- --watch --coverage` runs `npm test -- --watch --coverage`.
+
 ## What setupper replaces (mapping from shell aliases)
 
 | Shell pattern | setupper equivalent |
@@ -229,6 +288,7 @@ shell for just that step.
 | `export SOME_VAR=…` | top‑level `env:` |
 | `echo "hint…"` | an `echo` step |
 | a `<name>() { … }` function using loops / `&` / `trap` | `shell: zsh` + a multi‑line `run:` block |
+| a function reading `"$1"` / `"$@"` | `args:` + `SETUPPER_ARG_*` (or `"$@"` with `shell`) |
 
 ## Documentation
 

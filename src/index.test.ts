@@ -19,6 +19,19 @@ beforeAll(async () => {
       "  web:",
       "    run:",
       "      - echo hi",
+      "  greet:",
+      "    args:",
+      "      - name: who",
+      "      - name: greeting",
+      "        default: hello",
+      '    run: echo "$SETUPPER_ARG_GREETING, $SETUPPER_ARG_WHO"',
+      "  pass:",
+      "    shell: bash",
+      "    args:",
+      "      - name: first",
+      "      - name: rest",
+      "        rest: true",
+      '    run: printf "[%s]" "$@"',
       "",
     ].join("\n"),
   );
@@ -91,6 +104,69 @@ test("<command> -h rejects trailing arguments", async () => {
   const { exitCode, stderr } = await run(["web", "-h", "--dry-run"], workspace);
   expect(exitCode).toBe(1);
   expect(stderr).toContain("unknown option: -h");
+});
+
+test("<command> passes declared args as SETUPPER_ARG_* env vars", async () => {
+  const { exitCode, stdout } = await run(["greet", "world", "hi"], workspace);
+  expect(exitCode).toBe(0);
+  expect(stdout).toBe("hi, world\n");
+});
+
+test("<command> fills an omitted optional arg from its default", async () => {
+  const { exitCode, stdout } = await run(["greet", "world"], workspace);
+  expect(exitCode).toBe(0);
+  expect(stdout).toBe("hello, world\n");
+});
+
+test("<command> does not re-parse an argument as shell", async () => {
+  const { exitCode, stdout } = await run(
+    ["greet", "; echo INJECTED"],
+    workspace,
+  );
+  expect(exitCode).toBe(0);
+  expect(stdout).toBe("hello, ; echo INJECTED\n");
+});
+
+test("<command> reports a missing required arg with usage", async () => {
+  const { exitCode, stdout, stderr } = await run(["greet"], workspace);
+  expect(exitCode).toBe(1);
+  expect(stderr).toContain("missing argument: who");
+  expect(stderr).toContain("usage: setupper greet <who> [greeting]");
+  expect(stdout).toBe("");
+});
+
+test("<command> rejects more args than declared", async () => {
+  const { exitCode, stderr } = await run(["greet", "a", "b", "c"], workspace);
+  expect(exitCode).toBe(1);
+  expect(stderr).toContain("unexpected argument: c");
+});
+
+test("<command> -- passes a dash-prefixed value such as -h", async () => {
+  const { exitCode, stdout } = await run(["greet", "--", "-h"], workspace);
+  expect(exitCode).toBe(0);
+  expect(stdout).toBe("hello, -h\n");
+});
+
+test("<command> -h shows usage and declared args", async () => {
+  const { exitCode, stdout } = await run(["greet", "-h"], workspace);
+  expect(exitCode).toBe(0);
+  expect(stdout).toContain("usage: setupper greet <who> [greeting]");
+  expect(stdout).toContain('- greeting  (default: "hello")');
+});
+
+test("<command> with shell forwards args and rest as $@", async () => {
+  const { exitCode, stdout } = await run(
+    ["pass", "a", "--", "--watch", "x y"],
+    workspace,
+  );
+  expect(exitCode).toBe(0);
+  expect(stdout).toBe("[a][--watch][x y]");
+});
+
+test("<command> rejects a flag before -- even with a rest arg", async () => {
+  const { exitCode, stderr } = await run(["pass", "a", "--watch"], workspace);
+  expect(exitCode).toBe(1);
+  expect(stderr).toContain("unknown option: --watch");
 });
 
 test("shell-init zsh prints the zsh integration", async () => {
