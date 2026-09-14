@@ -21,6 +21,9 @@ logs/
 .cache/
 *.tsbuildinfo
 
+# Git worktrees
+.worktree/
+
 # OS / editor
 .DS_Store
 *.swp
