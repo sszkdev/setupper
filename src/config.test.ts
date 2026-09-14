@@ -41,7 +41,57 @@ test("parseConfig error names the offending path", () => {
   // `false` is a YAML boolean, so this step's `run` is not a string.
   expect(() =>
     parseConfig("version: 1\ncommands:\n  c:\n    run:\n      - false\n"),
-  ).toThrow(/commands\.c\.run/);
+  ).toThrow(/commands\.c\.run\.0: /);
+});
+
+test("parseConfig error keeps the parent path when no union option matches", () => {
+  expect(() =>
+    parseConfig("version: 1\ncommands:\n  c:\n    run: 123\n"),
+  ).toThrow(/commands\.c\.run: /);
+});
+
+test("parseConfig hints at quoting a step that YAML parsed as a map", () => {
+  const yaml =
+    "version: 1\ncommands:\n  hint:\n    run:\n      - echo done. run 'setupper test': to try it\n";
+  expect(() => parseConfig(yaml)).toThrow(
+    /commands\.hint\.run\.0: step is a map without "run" \(keys: "echo done\. run 'setupper test'"\)\. .*quote the whole step/,
+  );
+});
+
+test("parseConfig does not hint at quoting a nested list step", () => {
+  const run = () =>
+    parseConfig("version: 1\ncommands:\n  c:\n    run:\n      - - echo hi\n");
+  expect(run).toThrow(
+    /commands\.c\.run\.0: Invalid type: Expected \(string \| Object\) but received Array/,
+  );
+  expect(run).not.toThrow(/quote/);
+});
+
+test("parseConfig does not hint at quoting an empty map step", () => {
+  const run = () =>
+    parseConfig("version: 1\ncommands:\n  c:\n    run:\n      - {}\n");
+  expect(run).toThrow(/commands\.c\.run\.0\.run: /);
+  expect(run).not.toThrow(/quote/);
+});
+
+test("parseConfig does not hint at quoting a map step that forgot run", () => {
+  const run = () =>
+    parseConfig(
+      "version: 1\ncommands:\n  c:\n    run:\n      - shell: zsh\n        allow_failure: true\n",
+    );
+  expect(run).toThrow(
+    /commands\.c\.run\.0: step is a map without "run" \(keys: "shell", "allow_failure"\)\./,
+  );
+  expect(run).not.toThrow(/quote/);
+});
+
+test("parseConfig accepts a quoted step containing ': '", () => {
+  const config = parseConfig(
+    "version: 1\ncommands:\n  hint:\n    run:\n      - \"echo done. run 'setupper test': to try it\"\n",
+  );
+  expect(normalizeSteps(command(config, "hint").run)).toEqual([
+    { run: "echo done. run 'setupper test': to try it", allow_failure: false },
+  ]);
 });
 
 test("normalizeSteps flattens a string run", () => {
