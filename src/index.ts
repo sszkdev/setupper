@@ -81,9 +81,22 @@ async function main(argv: string[]): Promise<number> {
     return 1;
   }
 
-  if (flag === "-h" || flag === "--help") {
+  const extra = argv.slice(1);
+  if (extra.length === 1 && (flag === "-h" || flag === "--help")) {
     printHelp(name, command);
     return 0;
+  }
+
+  // Commands take no arguments; ignoring them would let a mistyped flag
+  // such as `--dry-run` silently perform the real run.
+  const [unexpected] = extra;
+  if (unexpected !== undefined) {
+    console.error(
+      unexpected.startsWith("-")
+        ? `unknown option: ${unexpected}`
+        : `unexpected argument: ${unexpected}`,
+    );
+    return 1;
   }
 
   return runCommand(config, command, workspaceRoot);
