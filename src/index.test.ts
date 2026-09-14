@@ -64,6 +64,35 @@ test("--has exits 1 when no command name is given", async () => {
   expect(exitCode).toBe(1);
 });
 
+test("<command> -h prints help without running the command", async () => {
+  const { exitCode, stdout } = await run(["web", "-h"], workspace);
+  expect(exitCode).toBe(0);
+  expect(stdout).toContain("steps:");
+});
+
+test("<command> rejects an unknown flag instead of running", async () => {
+  const { exitCode, stdout, stderr } = await run(
+    ["web", "--dry-run"],
+    workspace,
+  );
+  expect(exitCode).toBe(1);
+  expect(stderr).toContain("unknown option: --dry-run");
+  expect(stdout).not.toContain("hi");
+});
+
+test("<command> rejects an unexpected positional argument", async () => {
+  const { exitCode, stdout, stderr } = await run(["web", "extra"], workspace);
+  expect(exitCode).toBe(1);
+  expect(stderr).toContain("unexpected argument: extra");
+  expect(stdout).not.toContain("hi");
+});
+
+test("<command> -h rejects trailing arguments", async () => {
+  const { exitCode, stderr } = await run(["web", "-h", "--dry-run"], workspace);
+  expect(exitCode).toBe(1);
+  expect(stderr).toContain("unknown option: -h");
+});
+
 test("shell-init zsh prints the zsh integration", async () => {
   const { exitCode, stdout } = await run(["shell-init", "zsh"], workspace);
   expect(exitCode).toBe(0);
